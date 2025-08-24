@@ -19,3 +19,9 @@ pandas==2.2.2
 httpx==0.27.2
 prometheus-client==0.20.0
 structlog==24.4.0
+
+[test]
+pytest
+pytest-asyncio
+pytest-mock
+pytest-xprocess

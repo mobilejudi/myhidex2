@@ -1,5 +1,8 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import ORJSONResponse
+from typing import AsyncGenerator
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from storage.db import init_models, SessionLocal, Signal
 from bus.events import bus, STREAM_SIGNALS
 import asyncio, json
@@ -19,6 +22,10 @@ async def _startup():
     await init_models()
     asyncio.create_task(_forward_signals())
 
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with SessionLocal() as session:
+        yield session
+
 async def _forward_signals():
     async for _, ev in bus.consume(STREAM_SIGNALS, "ws", "ws-1"):
         dead = []
@@ -35,12 +42,11 @@ async def health():
     return {"ok": True}
 
 @app.get("/signals")
-async def list_signals(limit: int = 50):
-    async with SessionLocal() as s:
-        rows = (await s.execute(
-            Signal.__table__.select().order_by(Signal.ts_ms.desc()).limit(limit)
-        )).mappings().all()
-        return [dict(r) for r in rows]
+async def list_signals(limit: int = 50, s: AsyncSession = Depends(get_db_session)):
+    rows = (await s.execute(
+        Signal.__table__.select().order_by(Signal.ts_ms.desc()).limit(limit)
+    )).mappings().all()
+    return [dict(r) for r in rows]
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
